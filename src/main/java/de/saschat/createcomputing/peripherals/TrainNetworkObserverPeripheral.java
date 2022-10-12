@@ -5,9 +5,7 @@ import com.simibubi.create.AllItems;
 import com.simibubi.create.Create;
 import com.simibubi.create.content.logistics.item.filter.AttributeFilterContainer;
 import com.simibubi.create.content.logistics.item.filter.FilterItem;
-import com.simibubi.create.content.logistics.trains.BezierConnection;
-import com.simibubi.create.content.logistics.trains.GraphLocation;
-import com.simibubi.create.content.logistics.trains.TrackNodeLocation;
+import com.simibubi.create.content.logistics.trains.*;
 import com.simibubi.create.content.logistics.trains.entity.Carriage;
 import com.simibubi.create.content.logistics.trains.entity.CarriageContraptionEntity;
 import com.simibubi.create.content.logistics.trains.entity.Train;
@@ -17,6 +15,7 @@ import com.simibubi.create.content.logistics.trains.management.edgePoint.observe
 import com.simibubi.create.content.logistics.trains.management.edgePoint.signal.SignalBoundary;
 import com.simibubi.create.content.logistics.trains.management.edgePoint.signal.SignalTileEntity;
 import com.simibubi.create.content.logistics.trains.management.edgePoint.station.GlobalStation;
+import com.simibubi.create.content.logistics.trains.management.schedule.Schedule;
 import com.simibubi.create.content.logistics.trains.management.schedule.ScheduleEntry;
 import com.simibubi.create.content.logistics.trains.management.schedule.condition.ScheduleWaitCondition;
 import dan200.computercraft.api.lua.MethodResult;
@@ -33,6 +32,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.items.ItemStackHandler;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
@@ -267,41 +267,71 @@ public class TrainNetworkObserverPeripheral extends SmartPeripheral {
         }));
         // GRAPH
         addMethod("getGraph", ((iComputerAccess, iLuaContext, iArguments) -> {
+            var graph = parent.getGraphLocation().graph;
             Set<TrackNodeLocation> nodes = parent.getGraphLocation().graph.getNodes();
             List<Object> map = new LinkedList<>();
-            int index = 0;
-            for (TrackNodeLocation location : nodes) {
-                Map<Object, Object> map2 = new HashMap<>();
-                map2.put("x", (Number) location.getX());
-                map2.put("y", (Number) location.getY());
-                map2.put("z", (Number) location.getZ());
-                map2.put("dimension", location.dimension.location().toString());
-                map2.put("bezier", false);
-                if (location instanceof TrackNodeLocation.DiscoveredLocation disc) {
-                    BezierConnection turn = disc.getTurn();
-                    if (turn != null) {
-                        map2.put("bezier", true);
-                        map2.put("girder", turn.hasGirder);
-                        map2.put("primary", turn.hasGirder);
-                        map2.put("positions", List.of(
-                            List.of(turn.tePositions.get(true).getX(), turn.tePositions.get(true).getY(), turn.tePositions.get(true).getZ()),
-                            List.of(turn.tePositions.get(false).getX(), turn.tePositions.get(false).getY(), turn.tePositions.get(false).getZ())
-                        ));
-                        map2.put("starts", List.of(
-                            List.of(turn.starts.get(true).x, turn.starts.get(true).y, turn.starts.get(true).z),
-                            List.of(turn.starts.get(false).x, turn.starts.get(false).y, turn.starts.get(false).z)
-                        ));
-                        map2.put("axes", List.of(
-                            List.of(turn.axes.get(true).x, turn.axes.get(true).y, turn.axes.get(true).z),
-                            List.of(turn.axes.get(false).x, turn.axes.get(false).y, turn.axes.get(false).z)
-                        ));
-                        map2.put("normals", List.of(
-                            List.of(turn.normals.get(true).x, turn.normals.get(true).y, turn.normals.get(true).z),
-                            List.of(turn.normals.get(false).x, turn.normals.get(false).y, turn.normals.get(false).z)
-                        ));
+
+            for (TrackNodeLocation nodeLocation : graph.getNodes()) {
+                TrackNode node = graph.locateNode(nodeLocation);
+                if (nodeLocation == null)
+                    continue;
+
+                Map<TrackNode, TrackEdge> connections = graph.getConnectionsFrom(node);
+                if (connections == null)
+                    continue;
+
+                int hashCode = node.hashCode();
+                for (Map.Entry<TrackNode, TrackEdge> entry : connections.entrySet()) {
+                    TrackNode other = entry.getKey();
+                    TrackEdge edge = entry.getValue();
+
+                    if (!edge.node1.getLocation().dimension.equals(edge.node2.getLocation().dimension))
+                        continue;
+                    if (other.hashCode() > hashCode)
+                        continue;
+
+                    Vec3 startPoint = edge.getPosition(0);
+                    Vec3 endPoint = edge.getPosition(1);
+
+                    Map<Object, Object> map2 = new HashMap<>();
+                    Map<Object, Object> from = new HashMap<>();
+                    from.put("x", startPoint.x);
+                    from.put("y", startPoint.y);
+                    from.put("z", startPoint.z);
+                    map2.put("from", from);
+                    Map<Object, Object> to = new HashMap<>();
+                    to.put("x", endPoint.x);
+                    to.put("y", endPoint.y);
+                    to.put("z", endPoint.z);
+                    map2.put("to", to);
+                    map2.put("dimension", nodeLocation.dimension.location().toString());
+                    map2.put("bezier", false);
+                    if (nodeLocation instanceof TrackNodeLocation.DiscoveredLocation disc) {
+                        BezierConnection turn = disc.getTurn();
+                        if (turn != null) {
+                            map2.put("bezier", true);
+                            map2.put("girder", turn.hasGirder);
+                            map2.put("primary", turn.hasGirder);
+                            map2.put("positions", List.of(
+                                    List.of(turn.tePositions.get(true).getX(), turn.tePositions.get(true).getY(), turn.tePositions.get(true).getZ()),
+                                    List.of(turn.tePositions.get(false).getX(), turn.tePositions.get(false).getY(), turn.tePositions.get(false).getZ())
+                            ));
+                            map2.put("starts", List.of(
+                                    List.of(turn.starts.get(true).x, turn.starts.get(true).y, turn.starts.get(true).z),
+                                    List.of(turn.starts.get(false).x, turn.starts.get(false).y, turn.starts.get(false).z)
+                            ));
+                            map2.put("axes", List.of(
+                                    List.of(turn.axes.get(true).x, turn.axes.get(true).y, turn.axes.get(true).z),
+                                    List.of(turn.axes.get(false).x, turn.axes.get(false).y, turn.axes.get(false).z)
+                            ));
+                            map2.put("normals", List.of(
+                                    List.of(turn.normals.get(true).x, turn.normals.get(true).y, turn.normals.get(true).z),
+                                    List.of(turn.normals.get(false).x, turn.normals.get(false).y, turn.normals.get(false).z)
+                            ));
+                        }
                     }
+                    map.add(map2);
                 }
-                map.add(map2);
             }
             return MethodResult.of(map);
         }));
@@ -340,9 +370,10 @@ public class TrainNetworkObserverPeripheral extends SmartPeripheral {
     }
 
     public static final boolean DEBUG_NBT = false;
+
     private static Object blowNBT(Tag tag) {
         Object b = Utils.blowNBT(tag);
-        if(DEBUG_NBT) {
+        if (DEBUG_NBT) {
             System.out.println("======================");
             System.out.println("in: " + tag.getClass().getName());
             System.out.println("out: " + b.getClass().getName());
