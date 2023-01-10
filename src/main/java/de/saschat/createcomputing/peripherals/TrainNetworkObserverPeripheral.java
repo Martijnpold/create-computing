@@ -175,7 +175,24 @@ public class TrainNetworkObserverPeripheral extends SmartPeripheral {
             if (first.isEmpty())
                 return MethodResult.of(null);
             GlobalStation station = first.get();
-            return MethodResult.of(station.tilePos.getX(), station.tilePos.getY(), station.tilePos.getZ());
+
+            Map<Object, Object> map = new HashMap<>();
+            Map<Object, Object> blockMap = new HashMap<>();
+            blockMap.put("x", station.tilePos.getX());
+            blockMap.put("y", station.tilePos.getY());
+            blockMap.put("z", station.tilePos.getZ());
+            map.put("station", blockMap);
+
+            var graph = parent.getGraphLocation().graph;
+            TrackEdge edge = graph.getConnection(station.edgeLocation.map(graph::locateNode));
+            Vec3 pos = edge.getPosition(station.position);
+            Map<Object, Object> trackMap = new HashMap<>();
+            trackMap.put("x", pos.x);
+            trackMap.put("y", pos.y);
+            trackMap.put("z", pos.z);
+            map.put("track", trackMap);
+
+            return MethodResult.of(map);
         });
         addMethod("getStopExpectedTrain", (iComputerAccess, iLuaContext, iArguments) -> {
             String b = iArguments.getString(0);

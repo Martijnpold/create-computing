@@ -54,22 +54,7 @@ public class Utils {
             }
             return ret;
         }
-        if (tag instanceof IntTag t) {
-            return t.getAsNumber();
-        }
-        if (tag instanceof ByteTag t) {
-            return t.getAsNumber();
-        }
-        if (tag instanceof ShortTag t) {
-            return t.getAsNumber();
-        }
-        if (tag instanceof LongTag t) {
-            return t.getAsNumber();
-        }
-        if (tag instanceof FloatTag t) {
-            return t.getAsNumber();
-        }
-        if (tag instanceof DoubleTag t) {
+        if (tag instanceof NumericTag t) {
             return t.getAsNumber();
         }
         if (tag instanceof StringTag t) {
