@@ -116,6 +116,43 @@ public class TrainNetworkObserverPeripheral extends SmartPeripheral {
             }
             return MethodResult.of(map);
         });
+        addMethod("setTrainSchedule", (iComputerAccess, iLuaContext, iArguments) -> {
+            String b = iArguments.getString(0);
+            Optional<Train> first = getTrains().stream().filter(a -> a.id.toString().equals(b)).findFirst();
+            if (first.isEmpty())
+                return MethodResult.of(false);
+
+            String c = iArguments.getString(1);
+            Optional<GlobalStation> second = getStations().stream().filter(a -> a.id.toString().equals(c)).findFirst();
+            if (second.isEmpty())
+                return MethodResult.of(false);
+
+            Train t = first.get();
+            GlobalStation s = second.get();
+
+            CompoundTag scheduleTag = new CompoundTag();
+            CompoundTag entryTag = new CompoundTag();
+
+            CompoundTag dataTag = new CompoundTag();
+            dataTag.putString("Text", s.name);
+
+            CompoundTag instructionTag = new CompoundTag();
+            instructionTag.putString("Id", "create:destination");
+            instructionTag.put("Data", dataTag);
+
+            entryTag.put("Instruction", instructionTag);
+            entryTag.put("Conditions", new ListTag());
+
+            ListTag entriesTag = new ListTag();
+            entriesTag.add(entryTag);
+            scheduleTag.put("Entries", entriesTag);
+            scheduleTag.putBoolean("Cyclic", false);
+
+            Schedule schedule = Schedule.fromTag(scheduleTag);
+            t.runtime.setSchedule(schedule, true);
+
+            return MethodResult.of(Utils.blowNBT(scheduleTag));
+        });
         addMethod("getTrainWorldPosition", (iComputerAccess, iLuaContext, iArguments) -> {
             String b = iArguments.getString(0);
             Optional<Train> first = getTrains().stream().filter(a -> a.id.toString().equals(b)).findFirst();
